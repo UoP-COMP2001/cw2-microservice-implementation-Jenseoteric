@@ -1,0 +1,21 @@
+<!doctype html>
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>PaymentService</title>
+  </head>
+  <body>
+    <h1>Trail App PaymentService</h1>
+    <p>Subscription plans currently offered:</p>
+    <ul>
+      {% for plan in plans %}
+      <li>
+        {{ plan.PlanName }} &mdash; &pound;{{ plan.Price }} ({{
+        plan.BillingCycle }})
+      </li>
+      {% endfor %}
+    </ul>
+    <p><a href="/api/ui">API documentation</a></p>
+  </body>
+</html>

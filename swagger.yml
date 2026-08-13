@@ -1,0 +1,250 @@
+openapi: 3.0.0
+info:
+  title: "PaymentService API"
+  description: "Manages the subscription tiers, subscriptions and payments for the Trail Application."
+  version: "1.0.0"
+
+servers:
+  - url: /api
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      x-bearerInfoFunc: auth.decode_token
+
+  schemas:
+    Credentials:
+      type: object
+      required: [username, email, password]
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+
+    SubscriptionIn:
+      type: object
+      required: [PlanID]
+      properties:
+        UserID:
+          type: integer
+          description: "Administrators only"
+        PlanID:
+          type: integer
+        AutoRenew:
+          type: boolean
+
+    SubscriptionUpdate:
+      type: object
+      properties:
+        PlanID:
+          type: integer
+        SubscriptionStatus:
+          type: string
+          enum: [Active, Cancelled, Expired]
+        EndDate:
+          type: string
+          format: date
+        AutoRenew:
+          type: boolean
+
+  parameters:
+    subscription_id:
+      name: subscription_id
+      description: "Identifier of the subscription"
+      in: path
+      required: true
+      schema:
+        type: integer
+
+# i tried routing the homepage through here first, kept to show the attempt:
+#   /:
+#     get:
+#       summary: "Display the homepage with all database plans"
+#       operationId: "app.home"
+#       responses:
+#         "200":
+#           description: "Successfully rendered HTML homepage"
+# it doesnt belong in the openapi spec though, since / returns html rather than
+# json and isnt part of the rest api. its a plain flask route in app.py instead
+
+paths:
+  /register:
+    post:
+      operationId: auth.register
+      tags: [Authentication]
+      summary: "Create a local account for a user the Authenticator recognises"
+      requestBody:
+        required: true
+        x-body-name: body
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+      responses:
+        "201":
+          description: "Account created"
+        "401":
+          description: "The Authenticator did not verify these credentials"
+        "409":
+          description: "An account already exists with these details"
+
+  /login:
+    post:
+      operationId: auth.login
+      tags: [Authentication]
+      summary: "Verify credentials externally and return a JWT"
+      requestBody:
+        required: true
+        x-body-name: body
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+      responses:
+        "200":
+          description: "Token issued"
+        "401":
+          description: "Invalid credentials"
+        "404":
+          description: "Verified, but no local account yet"
+
+  /plans:
+    get:
+      operationId: plans.read_all
+      tags: [Plans]
+      summary: "List the available subscription plans and their features"
+      responses:
+        "200":
+          description: "The list of plans"
+
+  /revenue:
+    get:
+      operationId: payments.revenue
+      tags: [Payments]
+      summary: "Revenue by plan, administrators only"
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "Revenue totals"
+        "403":
+          description: "Administrators only"
+
+  /payments/{payment_id}/refund:
+    put:
+      operationId: payments.refund
+      tags: [Payments]
+      summary: "Mark a payment as refunded, administrators only"
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: payment_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: "Refunded"
+        "403":
+          description: "Administrators only"
+        "404":
+          description: "Not found"
+        "409":
+          description: "That payment was not completed, so there is nothing to refund"
+
+  /subscriptions:
+    get:
+      operationId: subscriptions.read_all
+      tags: [Subscriptions]
+      summary: "List subscriptions. Users see their own, administrators see all."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "The list of subscriptions"
+        "401":
+          description: "A valid token is required"
+
+    post:
+      operationId: subscriptions.create
+      tags: [Subscriptions]
+      summary: "Start a new subscription"
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        x-body-name: body
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionIn"
+      responses:
+        "201":
+          description: "Subscription created"
+        "403":
+          description: "Not permitted"
+        "409":
+          description: "An active subscription already exists"
+
+  /subscriptions/{subscription_id}:
+    get:
+      operationId: subscriptions.read_one
+      tags: [Subscriptions]
+      summary: "Read one subscription"
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/subscription_id"
+      responses:
+        "200":
+          description: "The subscription"
+        "403":
+          description: "Not permitted"
+        "404":
+          description: "Not found"
+
+    put:
+      operationId: subscriptions.update
+      tags: [Subscriptions]
+      summary: "Change a subscription, for example to cancel it"
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/subscription_id"
+      requestBody:
+        required: true
+        x-body-name: body
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionUpdate"
+      responses:
+        "200":
+          description: "Subscription updated"
+        "403":
+          description: "Not permitted"
+        "404":
+          description: "Not found"
+
+    delete:
+      operationId: subscriptions.delete
+      tags: [Subscriptions]
+      summary: "Delete a subscription and its payments"
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/subscription_id"
+      responses:
+        "200":
+          description: "Subscription deleted"
+        "403":
+          description: "Not permitted"
+        "404":
+          description: "Not found"
